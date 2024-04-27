@@ -61,8 +61,7 @@ def train():
 
     checkpoint = ModelCheckpoint("E:/OCR/Result/model_checkpoint.h5",
                                  monitor='val_loss',
-                                 save_best_only=True,
-                                 save_weights_only=True)
+                                 save_best_only=True)
 
     history = model.fit(
         train,

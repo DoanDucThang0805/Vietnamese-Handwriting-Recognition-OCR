@@ -61,6 +61,7 @@ def train():
 
     checkpoint = ModelCheckpoint("E:/OCR/Result/model_checkpoint.h5",
                                  monitor='val_loss',
+                                 save_format='h5',
                                  save_best_only=True)
 
     history = model.fit(
@@ -70,3 +71,18 @@ def train():
         callbacks=[early_stopping, checkpoint]
     )
     plot(history)
+
+# if __name__ == "__main__":
+#     model = CRNN_model(input_dim=(Image_Hight, Image_With, 1), output_dim=len(vocab))
+#     model.compile(
+#         optimizer=Adam(learning_rate=0.001),
+#         loss=ctc_loss
+#     )
+#     early_stopping = EarlyStopping(monitor='val_loss',
+#                                    patience=10,
+#                                    restore_best_weights=True)
+#
+#     checkpoint = ModelCheckpoint("E:/OCR/Result/model_checkpoint.keras",
+#                                  monitor='val_loss',
+#                                  save_best_only=True)
+#     print(model.summary())

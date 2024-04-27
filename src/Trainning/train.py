@@ -30,7 +30,6 @@ def plot(history):
 def train():
     # ____________________preprocessing___________________________
     X = load_image()
-    print(X.shape)
     labels = list(data.label)
     Y = []
     for label in labels:

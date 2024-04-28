@@ -59,9 +59,8 @@ def train():
                                    patience=10,
                                    restore_best_weights=True)
 
-    checkpoint = ModelCheckpoint("E:/OCR/Result/model_checkpoint.h5",
+    checkpoint = ModelCheckpoint("E:/OCR/Result/model_checkpoint.keras",
                                  monitor='val_loss',
-                                 save_format='h5',
                                  save_best_only=True)
 
     history = model.fit(

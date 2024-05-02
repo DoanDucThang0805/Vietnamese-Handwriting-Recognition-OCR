@@ -1,11 +1,11 @@
 import numpy as np
-from src.Config.config import Max_Length, vocab, Image_With, Image_Hight
+from src.Config.config import Max_Length, vocab, Image_With, Image_Hight, Model_path, Image_path
 from src.Util.util import load_image, encode_to_labels
 from src.Util.util import data
 from src.Loss.CTC_loss import ctc_loss
 from src.Model.crnn_model import CRNN_model
 import tensorflow as tf
-from tensorflow.keras.optimizers import Adam
+from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 import matplotlib.pyplot as plt
 
@@ -23,7 +23,7 @@ def plot(history):
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.legend()
-    plt.savefig("E:/OCR/Image/his_train.png")
+    plt.savefig(Image_path)
     plt.show()
 
 
@@ -59,7 +59,7 @@ def train():
                                    patience=10,
                                    restore_best_weights=True)
 
-    checkpoint = ModelCheckpoint("E:/OCR/Result/model_checkpoint.keras",
+    checkpoint = ModelCheckpoint(Model_path,
                                  monitor='val_loss',
                                  save_best_only=True)
 

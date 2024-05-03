@@ -11,12 +11,10 @@ from src.Model.crnn_model import CRNN_model
 
 
 def plot(history):
-    # Lấy thông tin từ history
     train_loss = history.history['loss']
     val_loss = history.history['val_loss']
     epochs = range(1, len(train_loss) + 1)
 
-    # Vẽ biểu đồ loss
     plt.plot(epochs, train_loss, label='Training loss')
     plt.plot(epochs, val_loss, label='Validation loss')
     plt.title('Training and validation loss')
@@ -28,8 +26,6 @@ def plot(history):
 
 
 def train():
-    # ____________________preprocessing on CPU___________________________
-    # with tf.device("/CPU:0"):
     X = load_image()
     labels = list(data.label)
     Y = []
@@ -39,34 +35,27 @@ def train():
         padding_array = np.zeros(padding_length, dtype=int)
         y = np.concatenate((y, padding_array))
         Y.append(y)
-    # ____________________________________________________________
-    X = tf.convert_to_tensor(X)
-    Y = tf.convert_to_tensor(Y)
 
     dataset = tf.data.Dataset.from_tensor_slices((X, Y))
+    dataset = dataset.map(lambda x, y: (tf.convert_to_tensor(x), tf.convert_to_tensor(y)))
     dataset = dataset.cache()
     dataset = dataset.shuffle(160000)
     dataset = dataset.batch(32)
-    dataset = dataset.prefetch(8)  # helps bottlenecks
+    dataset = dataset.apply(tf.data.experimental.copy_to_device("/GPU:0"))
+    dataset = dataset.prefetch(8)
 
     train = dataset.take(int(len(dataset) * 0.8))
     val = dataset.skip(int(len(dataset) * 0.8)).take(int(len(dataset) * 0.2))
     test = dataset.skip(int(len(dataset) * 0.9)).take(int(len(dataset) * 0.1))
-    # ____________________training on GPU___________________________
-    # with tf.device("/GPU:0"):
+
     model = CRNN_model(input_dim=(Image_Hight, Image_With, 1), output_dim=len(vocab))
     model.compile(
         optimizer=Adam(learning_rate=0.001),
         loss=ctc_loss
     )
 
-    early_stopping = EarlyStopping(monitor='val_loss',
-                                   patience=10,
-                                   restore_best_weights=True)
-
-    checkpoint = ModelCheckpoint(Model_path,
-                                 monitor='val_loss',
-                                 save_best_only=True)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+    checkpoint = ModelCheckpoint(Model_path, monitor='val_loss', save_best_only=True)
 
     history = model.fit(
         train,

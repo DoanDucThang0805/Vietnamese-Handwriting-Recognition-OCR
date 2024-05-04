@@ -35,6 +35,6 @@ def CRNN_model(input_dim, output_dim, activation="gelu"):
     return model
 
 
-if __name__ == "__main__":
-    model = CRNN_model((32, 128, 1), 17)
-    print(model.summary())
+# if __name__ == "__main__":
+#     model = CRNN_model((32, 128, 1), 17)
+#     print(model.summary())

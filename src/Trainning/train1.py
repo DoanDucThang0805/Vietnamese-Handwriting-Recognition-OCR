@@ -4,8 +4,7 @@ from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 import matplotlib.pyplot as plt
 from src.Config.config import Max_Length, vocab, Image_With, Image_Hight, Image_path, Model_path
-from src.Util.util import load_image, encode_to_labels
-from src.Util.util import data
+from src.Util.util import load_image, encode_to_labels, data, DataGenerator
 from src.Loss.CTC_loss import ctc_loss
 from src.Model.crnn_model import CRNN_model
 
@@ -28,25 +27,33 @@ def plot(history):
 def train():
     X = load_image()
     labels = list(data.label)
-    Y = []
-    for label in labels:
-        y = encode_to_labels(label)
-        padding_length = Max_Length - len(y)
-        padding_array = np.zeros(padding_length, dtype=int)
-        y = np.concatenate((y, padding_array))
-        Y.append(y)
+    Y = [np.concatenate((encode_to_labels(label),
+                         np.zeros(Max_Length - len(encode_to_labels(label)), dtype=int))) for label in labels]
 
-    dataset = tf.data.Dataset.from_tensor_slices((X, Y))
-    dataset = dataset.map(lambda x, y: (tf.convert_to_tensor(x), tf.convert_to_tensor(y)))
+    # Khởi tạo DataGenerator
+    batch_size = 8
+    data_generator = DataGenerator(X, Y, batch_size)
+
+    # Tạo Dataset từ generator
+    dataset = tf.data.Dataset.from_generator(
+        lambda: data_generator,
+        output_types=(tf.float32, tf.float32),
+        output_shapes=([None, Image_Hight, Image_With, 1], [None, Max_Length])
+    )
+
+    # Các bước xử lý dữ liệu tiếp theo
     dataset = dataset.cache()
     dataset = dataset.shuffle(160000)
-    dataset = dataset.batch(32)
-    dataset = dataset.apply(tf.data.experimental.copy_to_device("/GPU:0"))
-    dataset = dataset.prefetch(8)
+    dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
-    train = dataset.take(int(len(dataset) * 0.8))
-    val = dataset.skip(int(len(dataset) * 0.8)).take(int(len(dataset) * 0.2))
-    test = dataset.skip(int(len(dataset) * 0.9)).take(int(len(dataset) * 0.1))
+    # Phân chia dữ liệu thành tập train, validation và test
+    train_size = int(len(data_generator) * 0.8)
+    val_size = int(len(data_generator) * 0.1)
+    test_size = len(data_generator) - train_size - val_size
+
+    train = dataset.take(train_size)
+    val = dataset.skip(train_size).take(val_size)
+    test = dataset.skip(train_size + val_size).take(test_size)
 
     model = CRNN_model(input_dim=(Image_Hight, Image_With, 1), output_dim=len(vocab))
     model.compile(

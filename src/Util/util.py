@@ -1,12 +1,14 @@
-import cv2
-from keras.utils import Sequence
-from src.Config.config import Image_Width, Image_Hight, Max_Length
 from src.Prepare_data.preparedata import Preparedata
+from src.Config.config import train_path, label_path, test_path, Image_Height, Image_Width, Max_Length, Image_path
+import tensorflow as tf
+from tensorflow.keras.layers import StringLookup
 import numpy as np
-from itertools import groupby
+from tensorflow import keras
+import matplotlib.pyplot as plt
 
-# Xây dựng từ điển theo các kí tự có trong label
-data = Preparedata.load_train_data()
+pre = Preparedata(train_path=train_path, test_path=test_path, label_path=label_path)
+data = pre.load_train_data()
+
 labels = list(data.label)
 char_list = set()
 for label in labels:
@@ -15,130 +17,85 @@ vocab = sorted(char_list)
 vocab = "".join(vocab)
 
 
-def encode_to_labels(text):
-    """
-    Chuyển đổi văn bản thành danh sách các chỉ mục tương ứng trong từ vựng.
-
-    Parameters:
-        text (str): Chuỗi văn bản cần được mã hóa.
-
-    Returns:
-        list: Danh sách các chỉ mục tương ứng với các ký tự trong văn bản.
-    """
-    index_list = []  # Khởi tạo danh sách để lưu trữ chỉ mục của các ký tự trong văn bản
-    for index, char in enumerate(text):
-        try:
-            index_list.append(vocab.index(char))  # Tìm chỉ mục của ký tự trong từ vựng và thêm vào danh sách
-        except ValueError:
-            print("Không tìm thấy trong từ vựng: ", char)  # In ra thông báo nếu ký tự không có trong từ vựng
-    return index_list  # Trả về danh sách các chỉ mục tương ứng với các ký tự trong văn bản
+def load_image(image_path):
+    image = tf.io.read_file(image_path)
+    decode_image = tf.image.decode_jpeg(contents=image, channels=1)
+    convert_image = tf.image.convert_image_dtype(image=decode_image, dtype=tf.float32)
+    resize_image = tf.image.resize(images=convert_image, size=(Image_Height, Image_Width))
+    image = tf.cast(resize_image, dtype=tf.float32)
+    return image
 
 
-class DataGenerator(Sequence):
-    """
-    Lớp DataGenerator dùng để tạo các batch dữ liệu từ tập dữ liệu ảnh và nhãn tương ứng.
-
-    Arguments:
-        x_set (list): Danh sách đường dẫn đến các tệp ảnh.
-        y_set (list): Danh sách các nhãn tương ứng với từng ảnh.
-        batch_size (int): Kích thước của mỗi batch dữ liệu.
-
-    Methods:
-        __len__: Trả về số lượng batch cần thiết để cover toàn bộ tập dữ liệu.
-        __getitem__: Lấy một batch dữ liệu dựa trên chỉ mục.
-        data_generation: Tạo dữ liệu cho một batch.
-    """
-
-    def __init__(self, x_set, y_set, batch_size):
-        """
-        Khởi tạo một đối tượng DataGenerator.
-
-        Parameters:
-            x_set (list): Danh sách đường dẫn đến các tệp ảnh.
-            y_set (list): Danh sách các nhãn tương ứng với từng ảnh.
-            batch_size (int): Kích thước của mỗi batch dữ liệu.
-        """
-        super().__init__()  # Khởi tạo lớp cơ sở Sequence
-        self.x = x_set  # Dữ liệu đầu vào (danh sách các đường dẫn tệp ảnh)
-        self.y = y_set  # Dữ liệu đầu ra (danh sách các nhãn tương ứng)
-        self.batch_size = batch_size  # Kích thước batch cho việc tạo dữ liệu
-
-    def __len__(self):
-        """
-        Trả về số lượng batch cần thiết để cover toàn bộ tập dữ liệu.
-
-        Returns:
-            int: Số lượng batch cần thiết.
-        """
-        return int(np.ceil(len(self.x) / float(self.batch_size)))
-
-    def __getitem__(self, idx):
-        """
-        Lấy một batch dữ liệu dựa trên chỉ mục.
-
-        Parameters:
-            idx (int): Chỉ mục của batch cần lấy.
-
-        Returns:
-            tuple: Một tuple chứa các mảng đầu vào và đầu ra của batch.
-        """
-        batch_x = self.x[idx * self.batch_size:(idx + 1) * self.batch_size]  # Batch dữ liệu đầu vào
-        batch_y = self.y[idx * self.batch_size:(idx + 1) * self.batch_size]  # Batch dữ liệu đầu ra
-        X, Y = self.data_generation(batch_x, batch_y)  # Tạo dữ liệu cho batch
-        return X, Y
-
-    @staticmethod
-    def data_generation(batch_x, batch_y):
-        """
-        Tạo dữ liệu cho một batch.
-
-        Parameters:
-            batch_x (list): Danh sách đường dẫn đến các tệp ảnh trong batch.
-            batch_y (list): Danh sách các nhãn tương ứng với từng ảnh trong batch.
-
-        Returns:
-            tuple: Một tuple chứa các mảng đầu vào và đầu ra của batch.
-        """
-        # Khởi tạo mảng để chứa ảnh đầu vào và nhãn đầu ra
-        X = np.ones([len(batch_x), Image_Hight, Image_Width, 1])  # Mảng cho ảnh đầu vào
-        Y = np.ones([len(batch_x), Max_Length])  # Mảng cho nhãn đầu ra
-
-        # Xử lý từng ảnh trong batch
-        for i, img in enumerate(batch_x):
-            # Đọc ảnh, chuyển đổi thành ảnh xám, và resize ảnh về kích thước yêu cầu
-            image = cv2.imread(img, cv2.IMREAD_GRAYSCALE)
-            image = cv2.resize(image, (Image_Width, Image_Hight))
-            image = np.expand_dims(image, -1)  # Thêm một chiều để phù hợp với hình dạng đầu vào
-            X[i] = image  # Gán ảnh đã xử lý vào mảng batch
-
-        # Xử lý từng nhãn văn bản trong batch
-        for i, text in enumerate(batch_y):
-            # Mã hóa nhãn văn bản thành một chuỗi số nguyên
-            text_encoded = encode_to_labels(text)
-            # Thêm các số 0 vào chuỗi đã mã hóa để có độ dài tối đa
-            Y[i] = text_encoded + [0 for _ in range(Max_Length - len(text_encoded))]
-
-        return X, Y
+char_to_number = StringLookup(vocabulary=list(vocab), mask_token=None)
+number_to_char = StringLookup(vocabulary=char_to_number.get_vocabulary(), mask_token=None, invert=True)
 
 
-def ctc_decoder(preds, blank_label=0):
-    """
-    Giải mã dự đoán từ mô hình CTC thành văn bản.
+def encode(image_path, label):
+    image = load_image(image_path)
+    chars = tf.strings.unicode_split(label, input_encoding='UTF-8')
+    vector = char_to_number(chars)
+    pad_size = Max_Length - tf.shape(vector)[0]
+    vector = tf.pad(vector, paddings=[[0, pad_size]], constant_values=len(vocab) + 1)
+    return {"image": image, "label": vector}
 
-    Tham số:
-    preds: Dự đoán từ mô hình CTC (mảng numpy).
-    blank_label: Chỉ mục nhãn đại diện cho ký hiệu trắng. Mặc định là 0.
 
-    Returns:
-    decoded_texts: Danh sách các văn bản đã được giải mã.
-    """
-    decoded_texts = []
-    for pred in preds:
-        # Loại bỏ các nhãn trắng và nhãn liên tiếp trùng nhau
-        decoded = [label for label, _ in groupby(pred) if label != blank_label]
-        # Loại bỏ nhãn trắng nếu có
-        decoded = [label for label in decoded if label != blank_label]
-        # Chuyển đổi chỉ mục nhãn thành ký tự
-        decoded_text = ''.join([chr(label + ord('a')) for label in decoded])
-        decoded_texts.append(decoded_text)
-    return decoded_texts
+def decode_pred(pred_label):
+    # Input length
+    input_len = np.ones(shape=pred_label.shape[0]) * pred_label.shape[1]
+
+    # CTC decode
+    decode = keras.backend.ctc_decode(pred_label, input_length=input_len, greedy=True)[0][0][:, :Max_Length]
+
+    # Converting numerics back to their character values
+    chars = number_to_char(decode)
+
+    # Join all the characters
+    texts = [tf.strings.reduce_join(inputs=char).numpy().decode('UTF-8') for char in chars]
+
+    # Remove the unknown token
+    filtered_texts = [text.replace('[UNK]', " ").strip() for text in texts]
+
+    return filtered_texts
+
+
+def show_images(data, GRID=None, FIGSIZE=(25, 6), cmap='binary_r', model=None, decode_pred=None):
+    # Plotting configurations
+    if GRID is None:
+        GRID = [3, 3]
+    plt.figure(figsize=FIGSIZE)
+    n_rows, n_cols = GRID
+
+    # Loading Data
+    data = next(iter(data))
+    images, labels = data['image'], data['label']
+
+    # Ensure you have exactly n_rows * n_cols images to display
+    num_images = n_rows * n_cols
+    if len(images) < num_images:
+        raise ValueError(
+            f"Data contains only {len(images)} images, but {num_images} are required for the specified GRID.")
+
+    # Iterate over the data
+    for index, (image, label) in enumerate(zip(images[:num_images], labels[:num_images])):
+
+        # Label processing
+        text_label = number_to_char(label)
+        text_label = tf.strings.reduce_join(text_label).numpy().decode('UTF-8')
+        text_label = text_label.replace("[UNK]", " ").strip()
+
+        # Create a sub plot
+        plt.subplot(n_rows, n_cols, index + 1)
+        plt.imshow(tf.transpose(image, perm=[0, 1, 2]), cmap=cmap)
+        plt.axis('off')
+
+        if model is not None and decode_pred is not None:
+            # Make prediction
+            pred = model.predict(tf.expand_dims(image, axis=0))
+            pred = decode_pred(pred)[0]
+            title = f"True : {text_label}\nPred : {pred}"
+            plt.title(title)
+        else:
+            # add title
+            plt.title(text_label)
+    plt.savefig(Image_path, "predict_plot.png")
+    plt.show()
